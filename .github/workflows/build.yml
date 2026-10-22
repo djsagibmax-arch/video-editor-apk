@@ -1,0 +1,30 @@
+name: Build C++ App
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up CMake & GCC
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential ffmpeg
+
+    - name: Build C++ Program
+      run: |
+        mkdir build
+        cd build
+        cmake ..
+        make
+
+    - name: Upload Binary/Executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: compiled-video-editor
+        path: build/video_editor
