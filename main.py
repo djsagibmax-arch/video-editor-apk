@@ -1,54 +1,61 @@
-import os
-import subprocess
+#include <iostream>
+#include <vector>
+#include <string>
+#include <filesystem>
+#include <cstdlib>
 
-# ==========================================
-# স্পিড ১.১x, কালার ও অডিও ক্লিনিং সহ ব্যাচ ভিডিও এডিটর
-# ==========================================
+namespace fs = std::filesystem;
 
-INPUT_DIR = "/content/input_videos"
-OUTPUT_DIR = "/content/output_videos"
+// FFmpeg লাইব্রেরি বা সিস্টেম কমান্ড ব্যবহার করে ব্যাচ প্রসেসিং করার ফাংশন
+void processVideos(const std::string& inputDir, const std::string& outputDir) {
+    // আউটপুট ফোল্ডার চেক করা এবং না থাকলে তৈরি করা
+    if (!fs::exists(outputDir)) {
+        fs::create_directories(outputDir);
+    }
 
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
+    int count = 0;
+    for (const auto& entry : fs::directory_iterator(inputDir)) {
+        if (entry.is_regular_file()) {
+            std::string ext = entry.path().extension().string();
+            // শুধুমাত্র ভিডিও ফাইলগুলো সিলেক্ট করা
+            if (ext == ".mp4" || ext == ".mkv" || ext == ".mov" || ext == ".avi") {
+                if (count >= 10) break; // একবারে সর্বোচ্চ ১০টি ভিডিওর জন্য
+                count++;
 
-print("ভিডিও প্রসেসিং টুল প্রস্তুত হচ্ছে...")
+                std::string inputPath = entry.path().string();
+                std::string filename = entry.path().filename().string();
+                std::string outputPath = outputDir + "/cpp_edited_" + filename;
 
-video_files = [f for f in os.listdir(INPUT_DIR) if f.endswith(('.mp4', '.mkv', '.mov', '.avi'))]
+                std::cout << "\n[" << count << "/10] প্রসেস হচ্ছে: " << filename << " ..." << std::endl;
 
-if not video_files:
-    print("❌ ইনপুট ফোল্ডারে কোনো ভিডিও পাওয়া যায়নি!")
-else:
-    print(f"📁 মোট {len(video_files)}টি ভিডিও পাওয়া গেছে। কাজ শুরু হচ্ছে...")
+                // FFmpeg কমান্ড তৈরি (C++ এর system() ফাংশন দিয়ে এক্সিকিউট করার জন্য)
+                // -vf: ব্রাইটনেস ০.০৮ বাড়ানো এবং ভিডিও স্পিড ১.১x করা
+                // -af: নয়েজ রিমুভ (afftdn) এবং অডিও স্পিড ১.১x করা
+                std::string command = "ffmpeg -y -i \"" + inputPath + 
+                                      "\" -vf \"eq=brightness=0.08,setpts=1/1.1*PTS\"" +
+                                      " -af \"afftdn=nf=-25,atempo=1.1\"" +
+                                      " -c:v libx264 -crf 23 -c:a aac -b:a 128k -ar 44100 -ac 2 \"" + 
+                                      outputPath + "\"";
 
-    for index, filename in enumerate(video_files[:10], start=1):
-        input_path = os.path.join(INPUT_DIR, filename)
-        output_filename = f"speed_edited_{filename}"
-        output_path = os.path.join(OUTPUT_DIR, output_filename)
+                // কমান্ড টার্মিনালে রান করা
+                int result = std::system(command.c_str());
+                if (result == 0) {
+                    std::cout << "✅ সফলভাবে সম্পন্ন! সেভ হয়েছে: " << outputPath << std::endl;
+                } else {
+                    std::cout << "❌ ফাইল প্রসেস করার সময় ত্রুটি হয়েছে: " << filename << std::endl;
+                }
+            }
+        }
+    }
+}
 
-        print(f"\n⏳ [{index}/10] প্রসেস ও স্পিড বাড়ানো হচ্ছে: {filename} ...")
+int main() {
+    std::string inputFolder = "./input_videos";
+    std::string outputFolder = "./output_videos";
 
-        # FFmpeg কমান্ড:
-        # ১. -vf 'eq=brightness=0.08,setpts=1/1.1*PTS' -> ব্রাইটনেস বাড়ানো এবং ভিডিওর স্পিড ১.১ গুণ করা
-        # ২. -af 'afftdn=nf=-25,atempo=1.1' -> ব্যাকগ্রাউন্ড নয়েজ রিমুভ করা এবং অডিওর স্পিড ১.১ গুণ করা
-        
-        ffmpeg_command = [
-            'ffmpeg', '-y',
-            '-i', input_path,
-            '-vf', 'eq=brightness=0.08,setpts=1/1.1*PTS',  # ব্রাইটনেস ও ১.১x ভিডিও স্পিড
-            '-af', 'afftdn=nf=-25,atempo=1.1',             # নয়েজ রিমুভ ও ১.১x অডিও স্পিড
-            '-c:v', 'libx264',
-            '-crf', '23',
-            '-c:a', 'aac',
-            '-b:a', '128k',
-            '-ar', '44100',
-            '-ac', '2',
-            output_path
-        ]
+    std::cout << "C++ এবং FFmpeg দিয়ে ব্যাচ ভিডিও এডিটিং শুরু হচ্ছে..." << std::endl;
+    processVideos(inputFolder, outputFolder);
+    std::cout << "\n🎉 সব ভিডিওর এডিটিং সফলভাবে শেষ হয়েছে!" << std::endl;
 
-        try:
-            subprocess.run(ffmpeg_command, check=True)
-            print(f"✅ সফলভাবে সম্পন্ন! সেভ হয়েছে: {output_filename}")
-        except subprocess.CalledProcessError as e:
-            print(f"❌ ফাইল {filename} এডিট করার সময় সমস্যা হয়েছে:", e)
-
-print("\n🎉 আলহামদুলিল্লাহ! আপনার সবগুলো ভিডিওর স্পিড ও এডিটিং সফলভাবে শেষ হয়েছে।")
+    return 0;
+}
